@@ -1,0 +1,953 @@
+:root {
+  /* 即时胶片：低对比、褪色、偏生活快照 / 怀旧（配合颗粒层） */
+  --polaroid-exposure: 1.02; /* 略提中间调，阴影不死黑 */
+  --polaroid-contrast: 0.76; /* 低对比、发灰、柔和 */
+  --polaroid-saturate: 0.62; /* 轻微褪色 */
+  --polaroid-sepia: 0.09; /* 很淡的化学片底色 */
+  --polaroid-hue: 8deg; /* 微偏青，不偏浓 */
+  --polaroid-blur: 0.55px; /* 极轻柔焦，略糊即可 */
+
+  --bg: #e8e8ea;
+  --bg-dot: rgba(95, 95, 102, 0.22);
+  --white-face: #f2f2f2;
+  --white-shade: #e6e6e6;
+  --white-rim: #fefefe;
+  --black-matte: #1a1a1a;
+  --black-deep: #121212;
+  --red-shutter: #ff1000;
+  --red-shutter-dark: #c80e00;
+  --yellow-accent: #ffc107;
+  /* 吐片 / 相纸最大宽度（槽口与 rail 对齐） */
+  --polaroid-print-max: 200px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "DM Sans", system-ui, sans-serif;
+  background-color: var(--bg);
+  /* 复古豆豆点 + 中间略亮（参考笔记本/相纸衬底） */
+  background-image: radial-gradient(
+      ellipse 78% 72% at 50% 46%,
+      rgba(255, 255, 255, 0.55) 0%,
+      rgba(255, 255, 255, 0.12) 45%,
+      transparent 68%
+    ),
+    radial-gradient(var(--bg-dot) 0.9px, transparent 1.05px);
+  background-size: 100% 100%, 13px 13px;
+  background-position: center, 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem 6rem;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* 极轻颗粒，增强纸本感 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+.flash-overlay {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 100;
+  transition: opacity 0.08s ease-out;
+}
+
+.flash-overlay.is-on {
+  opacity: 0.85;
+  transition: opacity 0.04s ease-in;
+}
+
+/* 高于 .stage，pointer-events: none 让空白处点到下层相机 */
+.photo-desk {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.stage {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+}
+
+.cam-status {
+  margin: 0 auto 0.75rem;
+  max-width: min(320px, 92vw);
+  min-height: 1.25em;
+  font-size: 0.8rem;
+  color: rgba(40, 40, 45, 0.75);
+}
+
+.cam-status:empty {
+  display: none;
+}
+
+.camera-wrap {
+  position: relative;
+  display: inline-block;
+  vertical-align: top;
+  overflow: visible;
+}
+
+.camera {
+  position: relative;
+  width: min(320px, 92vw);
+  overflow: visible;
+  filter: drop-shadow(0 28px 48px rgba(0, 0, 0, 0.5))
+    drop-shadow(0 8px 16px rgba(0, 0, 0, 0.25));
+}
+
+/* 吐片区占满底行，槽与相纸水平居中，左右边距对称 */
+.eject-portal {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: stretch;
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.eject-prints {
+  position: absolute;
+  left: 50%;
+  right: auto;
+  /* 略上移，白相纸盖住缝的上沿；z-index 高于槽，图层在「缝」上面 */
+  top: -3px;
+  transform: translateX(-50%);
+  width: min(var(--polaroid-print-max), 100%);
+  max-width: var(--polaroid-print-max);
+  z-index: 4;
+  pointer-events: none;
+  /* 较小 perspective = 更强景深，下端（离观者近）透视上更宽 */
+  perspective: 340px;
+  perspective-origin: 50% 0;
+  transform-style: preserve-3d;
+}
+
+.camera-top {
+  position: relative;
+  z-index: 2;
+  border-radius: 26px 26px 0 0;
+  padding: 18px 20px 52px;
+  background: linear-gradient(
+    165deg,
+    #fafafa 0%,
+    var(--white-face) 35%,
+    var(--white-shade) 100%
+  );
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-bottom: none;
+  box-shadow: inset 0 1px 0 var(--white-rim),
+    inset 1px 0 0 rgba(255, 255, 255, 0.45),
+    inset -1px 0 2px rgba(0, 0, 0, 0.04),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.03),
+    0 14px 22px -4px rgba(0, 0, 0, 0.42),
+    0 6px 10px rgba(0, 0, 0, 0.18);
+}
+
+.side-tab {
+  position: absolute;
+  left: -10px;
+  top: 42%;
+  width: 14px;
+  height: 36px;
+  background: linear-gradient(90deg, #f8f8f8, #e2e2e2);
+  border-radius: 8px 0 0 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-right: none;
+  box-shadow: inset 2px 0 3px rgba(255, 255, 255, 0.5),
+    2px 3px 6px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.side-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #222;
+}
+
+.flash {
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  width: 38px;
+  height: 50px;
+  background: linear-gradient(180deg, #e8e8e8 0%, #d8d8d8 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.2),
+    inset 0 -2px 4px rgba(255, 255, 255, 0.35),
+    0 2px 4px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.flash-grid {
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+      90deg,
+      #c8c8c8 0px,
+      #c8c8c8 1px,
+      #ececec 1px,
+      #ececec 5px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      #c8c8c8 0px,
+      #c8c8c8 1px,
+      #f0f0f0 1px,
+      #f0f0f0 4px
+    );
+  opacity: 0.9;
+}
+
+.viewfinder {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(145deg, #2a2a2c 0%, #0a0a0b 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 2px 6px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vf-inner {
+  width: 24px;
+  height: 24px;
+  background: radial-gradient(
+    ellipse at 35% 30%,
+    rgba(180, 200, 220, 0.25) 0%,
+    transparent 45%
+  ),
+    #0d0d10;
+  border-radius: 4px;
+  position: relative;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.9),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.05);
+}
+
+.vf-inner::before,
+.vf-inner::after {
+  content: "";
+  position: absolute;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.vf-inner::before {
+  left: 50%;
+  top: 2px;
+  bottom: 2px;
+  width: 1px;
+  transform: translateX(-50%);
+}
+
+.vf-inner::after {
+  top: 50%;
+  left: 2px;
+  right: 2px;
+  height: 1px;
+  transform: translateY(-50%);
+}
+
+.lens {
+  position: relative;
+  width: 124px;
+  height: 124px;
+  margin: 6px auto 0;
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.28))
+    drop-shadow(0 3px 5px rgba(0, 0, 0, 0.15));
+}
+
+.lens-ring {
+  position: absolute;
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border: solid rgba(0, 0, 0, 0.2);
+}
+
+.lens-ring--3 {
+  width: 122px;
+  height: 122px;
+  background: radial-gradient(circle at 50% 40%, #3a3a42 0%, #28282c 35%, #1c1c20 100%);
+  border-width: 2px;
+  border-color: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35),
+    0 2px 4px rgba(0, 0, 0, 0.2),
+    inset 0 2px 3px rgba(255, 255, 255, 0.05),
+    inset 0 -10px 22px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.lens-ring--2 {
+  width: 94px;
+  height: 94px;
+  background: linear-gradient(155deg, #35353a 0%, #18181c 100%);
+  border-width: 2px;
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.55),
+    inset 0 -2px 4px rgba(255, 255, 255, 0.03);
+}
+
+.lens-ring--1 {
+  width: 74px;
+  height: 74px;
+  background: #101012;
+  border-width: 1px;
+  box-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.8);
+}
+
+.svg-filters {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.lens-glass {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #080a0c;
+  box-shadow: inset 0 0 18px 5px rgba(0, 0, 0, 0.55),
+    inset 0 -6px 14px rgba(0, 0, 0, 0.45),
+    inset 0 3px 8px rgba(100, 160, 140, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* 暗色遮罩：整体压暗 + 边缘渐重（在视频上、着色与眩光下） */
+.lens-mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+      ellipse 80% 80% at 50% 50%,
+      rgba(0, 0, 0, 0.06) 0%,
+      rgba(0, 0, 0, 0.32) 62%,
+      rgba(0, 0, 0, 0.52) 100%
+    ),
+    rgba(0, 0, 0, 0.12);
+}
+
+/* 眩光：斜向高光 + 次光斑 + 边缘冷色 */
+.lens-glass::before {
+  content: "";
+  position: absolute;
+  inset: -8%;
+  border-radius: 50%;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(
+      118deg,
+      transparent 0%,
+      transparent 36%,
+      rgba(255, 255, 255, 0.55) 43%,
+      rgba(255, 255, 255, 0.18) 49%,
+      transparent 56%,
+      transparent 100%
+    ),
+    radial-gradient(
+      ellipse 42% 28% at 78% 18%,
+      rgba(255, 255, 255, 0.42) 0%,
+      rgba(255, 255, 255, 0.08) 45%,
+      transparent 70%
+    ),
+    radial-gradient(
+      circle at 12% 88%,
+      rgba(200, 230, 255, 0.35) 0%,
+      transparent 50%
+    );
+  mix-blend-mode: soft-light;
+  opacity: 0.92;
+}
+
+.lens-glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(
+      circle at 32% 26%,
+      rgba(200, 255, 210, 0.18) 0%,
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 72% 70%,
+      rgba(220, 190, 255, 0.15) 0%,
+      transparent 45%
+    );
+  mix-blend-mode: screen;
+  opacity: 0.75;
+}
+
+.lens-feed {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  transform: scale(1.2);
+  transform-origin: center center;
+  filter: url(#lensFisheye) saturate(1.08) contrast(1.06);
+}
+
+.label-row {
+  position: absolute;
+  right: 18px;
+  bottom: 46px;
+  top: auto;
+  transform: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  line-height: 1.1;
+}
+
+.counter {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-width: 38px;
+  max-width: 38px;
+  box-sizing: border-box;
+  background: #121214;
+  color: var(--yellow-accent);
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 4px 0;
+  border-radius: 6px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 3px rgba(0, 0, 0, 0.12);
+  font-variant-numeric: tabular-nums;
+}
+
+.counter__viewport {
+  height: 1.15em;
+  overflow: hidden;
+  line-height: 1.15;
+}
+
+.counter__strip {
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.36s cubic-bezier(0, 0, 0.2, 1);
+}
+
+.counter__line {
+  height: 1.15em;
+  line-height: 1.15;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.label-one-step {
+  font-weight: 700;
+  font-size: 1.02rem;
+  color: #1a1a1a;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.exposure {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px 5px 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #2a2a2e 0%, #141416 100%);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 2px 6px rgba(0, 0, 0, 0.15);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.exp-track {
+  width: 54px;
+  height: 14px;
+  background: linear-gradient(180deg, #0a0a0c 0%, #18181c 100%);
+  border-radius: 999px;
+  position: relative;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.exp-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 17px;
+  height: 17px;
+  background: radial-gradient(circle at 32% 28%, #ffe082, var(--yellow-accent));
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.35),
+    inset 0 1px 2px rgba(255, 255, 255, 0.45),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.15);
+}
+
+.shutter {
+  position: absolute;
+  bottom: 12px;
+  left: 18px;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+.shutter::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #f5f5f5 0%, #dedede 100%);
+  box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.18),
+    inset 0 -2px 4px rgba(255, 255, 255, 0.5),
+    0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.shutter::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: linear-gradient(
+    165deg,
+    #ff2820 0%,
+    var(--red-shutter) 45%,
+    var(--red-shutter-dark) 100%
+  );
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.35),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.35), 0 3px 5px rgba(0, 0, 0, 0.22);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.shutter:hover::after {
+  filter: brightness(1.05);
+}
+
+.shutter:active::after {
+  transform: scale(0.94);
+  box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.4),
+    inset 0 1px 1px rgba(255, 255, 255, 0.2);
+}
+
+.shutter:focus-visible {
+  outline: 2px solid var(--yellow-accent);
+  outline-offset: 3px;
+}
+
+.camera-bottom {
+  position: relative;
+  z-index: 1;
+  margin-top: -3px;
+  border-radius: 0 0 22px 22px;
+  padding: 0;
+  min-height: 118px;
+  overflow: visible;
+  background: linear-gradient(180deg, #222 0%, var(--black-matte) 22%, var(--black-deep) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  border-top: none;
+  box-shadow: inset 0 12px 18px rgba(0, 0, 0, 0.55),
+    inset 0 2px 4px rgba(255, 255, 255, 0.03),
+    0 6px 14px rgba(0, 0, 0, 0.35);
+}
+
+.bottom-bar {
+  display: grid;
+  grid-template-columns: 14px 1fr minmax(52px, auto);
+  grid-template-rows: auto auto;
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 8px;
+  padding: 16px 14px 20px;
+  min-height: 118px;
+  overflow: visible;
+}
+
+.rainbow-stripe {
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+  min-height: 54px;
+  border-radius: 3px;
+  align-self: end;
+  background: linear-gradient(
+    180deg,
+    #1976d2 0%,
+    #1976d2 20%,
+    #43a047 20%,
+    #43a047 40%,
+    #fbc02d 40%,
+    #fbc02d 60%,
+    #fb8c00 60%,
+    #fb8c00 80%,
+    #e53935 80%
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    2px 0 6px rgba(0, 0, 0, 0.35);
+}
+
+.bottom-middle {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 0;
+  overflow: visible;
+}
+
+.film-latch {
+  width: 36px;
+  height: 8px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #3a3a3e 0%, #1e1e22 100%);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.brand {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f5f5f5;
+  letter-spacing: 0.06em;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.film-slot {
+  position: relative;
+  z-index: 1;
+  width: min(var(--polaroid-print-max), 100%);
+  max-width: none;
+  height: 6px;
+  margin-top: 0;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    #030305 6%,
+    #0a0a10 50%,
+    #030305 94%,
+    transparent 100%
+  );
+  box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.98),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.6),
+    0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+.sub-side {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: end;
+  transform: translateY(-4px);
+  font-size: 0.45rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: right;
+  padding-top: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.prints-rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  transform-style: preserve-3d;
+  padding-bottom: 48px;
+  pointer-events: none;
+}
+
+.prints-rail .polaroid {
+  pointer-events: auto;
+}
+
+/* 外框 103:102，内相区 92:73；侧白边略收紧（略宽于比例，减少两侧留白感） */
+.polaroid {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--polaroid-print-max);
+  aspect-ratio: 103 / 102;
+  box-sizing: border-box;
+  background: #faf9f7;
+  padding-left: calc(100% * 5 / 206);
+  padding-right: calc(100% * 5 / 206);
+  padding-top: calc(100% * 5 / 103);
+  padding-bottom: calc(100% * 9 / 103);
+  border-radius: 2px;
+  transform-origin: 50% 0;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.04), 0 22px 28px -6px rgba(0, 0, 0, 0.38),
+    0 10px 14px rgba(0, 0, 0, 0.22);
+  margin-top: 0;
+  animation: eject 1.15s cubic-bezier(0.32, 0.42, 0.18, 1) forwards;
+}
+
+.polaroid:not(:first-child) {
+  margin-top: 14px;
+}
+
+/* 吐片结束后可拖 */
+.polaroid.polaroid--grabbable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 已贴到屏幕上：正视角、无 3D 俯仰（外框仍 103:102） */
+.polaroid.polaroid--pinned {
+  position: fixed;
+  margin: 0 !important;
+  max-width: min(var(--polaroid-print-max), 48vw);
+  width: min(var(--polaroid-print-max), 48vw);
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transform: none !important;
+  transform-style: flat;
+  animation: none;
+  clip-path: none;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.05), 0 14px 28px rgba(0, 0, 0, 0.3),
+    0 6px 12px rgba(0, 0, 0, 0.18);
+}
+
+.polaroid.polaroid--pinned::after {
+  opacity: 0.55;
+  filter: blur(8px);
+}
+
+.polaroid.polaroid--dragging {
+  cursor: grabbing;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.06), 0 22px 40px rgba(0, 0, 0, 0.38),
+    0 10px 18px rgba(0, 0, 0, 0.22);
+}
+
+.polaroid::after {
+  content: "";
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  bottom: 2px;
+  height: 16px;
+  background: radial-gradient(
+    ellipse 92% 50% at 50% 0%,
+    rgba(0, 0, 0, 0.5) 0%,
+    rgba(0, 0, 0, 0.15) 42%,
+    transparent 70%
+  );
+  filter: blur(6px);
+  opacity: 0.9;
+  z-index: -1;
+  pointer-events: none;
+}
+
+@keyframes eject {
+  /* 透视形变全程一致，只通过 clip-path 从槽口向下揭开，不在中途改 transform */
+  0%,
+  100% {
+    transform: translateZ(14px) rotateX(26deg);
+  }
+  0% {
+    clip-path: inset(0 0 99.2% 0 round 1px);
+    opacity: 1;
+  }
+  100% {
+    clip-path: inset(0 0 0 0 round 2px);
+    opacity: 1;
+  }
+}
+
+.polaroid__img-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  aspect-ratio: 92 / 73;
+  background: #222018;
+  overflow: hidden;
+  border-radius: 2px;
+}
+
+/* 胶片颗粒（叠在最上，soft-light 保留褪色感） */
+.polaroid__img-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0.22;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+/* 暗角 + 轻叠色：随意快照感，不过度戏剧 */
+.polaroid__img-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(
+      ellipse 98% 94% at 50% 48%,
+      transparent 38%,
+      rgba(42, 40, 36, 0.2) 85%,
+      rgba(32, 30, 28, 0.32) 100%
+    ),
+    linear-gradient(
+      168deg,
+      rgba(248, 242, 232, 0.1) 0%,
+      transparent 48%,
+      rgba(200, 208, 212, 0.09) 100%
+    );
+  mix-blend-mode: multiply;
+  opacity: 0.78;
+}
+
+.polaroid__img {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  /* 小图拉大时保留硬边缘像素格（配合低分辨率 capture） */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background-image: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.08) 0%,
+      transparent 52%
+    ),
+    var(
+      --shot,
+      linear-gradient(160deg, #5c6b7a 0%, #8b9aab 35%, #c5d0dc 55%, #7a8fa3 100%)
+    );
+  background-size: cover;
+  filter: brightness(0) contrast(1.08) saturate(0.35)
+    blur(calc(var(--polaroid-blur) * 1.12));
+  animation: develop 3.6s ease-out 0.35s forwards;
+}
+
+@keyframes develop {
+  0% {
+    filter: brightness(0) contrast(1.12) saturate(0.15)
+      blur(calc(var(--polaroid-blur) * 1.22));
+  }
+  38% {
+    filter: brightness(0.22) contrast(0.95) saturate(0.42) sepia(0.22)
+      blur(calc(var(--polaroid-blur) * 1.06));
+  }
+  100% {
+    filter: brightness(var(--polaroid-exposure))
+      contrast(var(--polaroid-contrast)) saturate(var(--polaroid-saturate))
+      sepia(var(--polaroid-sepia)) hue-rotate(var(--polaroid-hue))
+      blur(var(--polaroid-blur));
+  }
+}
+
+.polaroid__caption {
+  margin-top: auto;
+  padding-top: 0.2rem;
+  font-size: 0.62rem;
+  color: #888;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  text-align: center;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+@media (max-width: 380px) {
+  .label-row {
+    right: 12px;
+    bottom: 42px;
+  }
+
+  .label-one-step {
+    font-size: 0.9rem;
+  }
+}

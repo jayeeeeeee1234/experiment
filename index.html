@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Polaroid i-Type — 拍立得</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,500;0,9..40,700;1,9..40,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <svg
+      class="svg-filters"
+      xmlns="http://www.w3.org/2000/svg"
+      width="0"
+      height="0"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <defs>
+        <filter
+          id="lensFisheye"
+          x="-25%"
+          y="-25%"
+          width="150%"
+          height="150%"
+          color-interpolation-filters="sRGB"
+        >
+          <feTurbulence
+            type="turbulence"
+            baseFrequency="0.018"
+            numOctaves="2"
+            seed="31"
+            result="warp"
+          />
+          <feDisplacementMap
+            in="SourceGraphic"
+            in2="warp"
+            scale="7"
+            xChannelSelector="R"
+            yChannelSelector="G"
+          />
+        </filter>
+      </defs>
+    </svg>
+    <div class="flash-overlay" id="flash" aria-hidden="true"></div>
+    <!-- 成片与成像区 92:73；约 8× 比例系数 -->
+    <canvas id="captureCanvas" hidden width="736" height="584"></canvas>
+
+    <!-- 全屏粘贴层：空白处穿透点击相机，仅相纸可拖 -->
+    <div class="photo-desk" id="photoDesk" aria-label="已拖到屏幕上的照片"></div>
+
+    <main class="stage">
+      <p class="cam-status" id="camStatus" role="status"></p>
+      <div class="camera-wrap">
+        <div class="camera" id="camera">
+          <div class="camera-top">
+            <div class="side-tab"><span class="side-dot"></span></div>
+
+            <div class="flash">
+              <div class="flash-grid"></div>
+            </div>
+
+            <div class="viewfinder">
+              <div class="vf-inner"></div>
+            </div>
+
+            <div class="lens">
+              <div class="lens-ring lens-ring--3"></div>
+              <div class="lens-ring lens-ring--2"></div>
+              <div class="lens-ring lens-ring--1"></div>
+              <div class="lens-glass">
+                <video
+                  id="cameraFeed"
+                  class="lens-feed"
+                  playsinline
+                  muted
+                  autoplay
+                  aria-label="镜头预览"
+                ></video>
+                <span class="lens-mask" aria-hidden="true"></span>
+              </div>
+            </div>
+
+            <div class="label-row">
+              <span class="counter" id="counter" aria-live="polite">
+                <span class="counter__viewport">
+                  <span class="counter__strip" id="counterStrip">
+                    <span class="counter__line">00</span>
+                  </span>
+                </span>
+              </span>
+              <span class="label-one-step">One Step</span>
+            </div>
+
+            <div class="exposure">
+              <span class="exp-minus">−</span>
+              <span class="exp-track"><span class="exp-knob"></span></span>
+              <span class="exp-plus">+</span>
+            </div>
+
+            <button
+              type="button"
+              class="shutter"
+              id="shutter"
+              aria-label="快门"
+            ></button>
+          </div>
+
+          <div class="camera-bottom">
+            <div class="bottom-bar">
+              <div class="rainbow-stripe"></div>
+              <div class="bottom-middle">
+                <div class="film-latch"></div>
+                <div class="brand">Polaroid</div>
+              </div>
+              <div class="sub-side">I-TYPE CAMERA</div>
+              <div class="eject-portal">
+                <div class="film-slot" id="ejectSlot"></div>
+                <div class="eject-prints" aria-live="polite">
+                  <div class="prints-rail" id="printsRail"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <template id="polaroidTpl">
+      <article class="polaroid">
+        <div class="polaroid__img-wrap">
+          <div class="polaroid__img"></div>
+        </div>
+        <div class="polaroid__caption">i-Type</div>
+      </article>
+    </template>
+
+    <script src="main.js"></script>
+  </body>
+</html>
