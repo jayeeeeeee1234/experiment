@@ -45,16 +45,52 @@
             yChannelSelector="G"
           />
         </filter>
+
+        <!-- 成片：更陡 S 曲线、暗部更重（仍保留一点灰黑位） -->
+        <filter
+          id="polaroidTone"
+          x="0"
+          y="0"
+          width="100%"
+          height="100%"
+          color-interpolation-filters="sRGB"
+        >
+          <feComponentTransfer in="SourceGraphic" result="curve">
+            <feFuncR
+              type="table"
+              tableValues="0.03 0.14 0.36 0.58 0.74 0.88 0.96 1"
+            />
+            <feFuncG
+              type="table"
+              tableValues="0.03 0.14 0.36 0.58 0.74 0.88 0.96 1"
+            />
+            <feFuncB
+              type="table"
+              tableValues="0.04 0.15 0.38 0.6 0.76 0.88 0.95 1"
+            />
+            <feFuncA type="identity" />
+          </feComponentTransfer>
+          <feColorMatrix
+            in="curve"
+            type="matrix"
+            values="1     0     0     0 0
+                    0     1     0     0 0
+                    0.02  0.08   0.82  0 0.03
+                    0     0     0     1 0"
+          />
+        </filter>
       </defs>
     </svg>
     <div class="flash-overlay" id="flash" aria-hidden="true"></div>
     <!-- 成片与成像区 92:73；约 8× 比例系数 -->
     <canvas id="captureCanvas" hidden width="736" height="584"></canvas>
 
-    <!-- 全屏粘贴层：空白处穿透点击相机，仅相纸可拖 -->
-    <div class="photo-desk" id="photoDesk" aria-label="已拖到屏幕上的照片"></div>
+    <div class="app-shell">
+      <div class="app-main">
+        <!-- 全屏粘贴层：空白处穿透点击相机，仅相纸可拖 -->
+        <div class="photo-desk" id="photoDesk" aria-label="已拖到屏幕上的照片"></div>
 
-    <main class="stage">
+        <main class="stage">
       <p class="cam-status" id="camStatus" role="status"></p>
       <div class="camera-wrap">
         <div class="camera" id="camera">
@@ -129,14 +165,196 @@
           </div>
         </div>
       </div>
-    </main>
+        </main>
+      </div>
+
+      <aside class="frame-sidebar" id="frameSidebar" aria-label="相纸样式">
+        <div class="frame-sidebar__list" role="radiogroup" aria-label="选择相纸">
+          <button
+            type="button"
+            class="frame-pick is-active"
+            data-frame="classic"
+            aria-checked="true"
+            role="radio"
+            aria-label="经典白框"
+          >
+            <span class="frame-pick__thumb">
+              <span class="frame-pick__film" aria-hidden="true"></span>
+              <img
+                class="frame-pick__art"
+                src="assets/classic.png"
+                alt=""
+                width="120"
+                height="98"
+                decoding="async"
+              />
+            </span>
+          </button>
+          <button
+            type="button"
+            class="frame-pick"
+            data-frame="flower"
+            aria-checked="false"
+            role="radio"
+            aria-label="花卉相框"
+          >
+            <span class="frame-pick__thumb">
+              <span class="frame-pick__film" aria-hidden="true"></span>
+              <img
+                class="frame-pick__art"
+                src="assets/flower.png"
+                alt=""
+                width="120"
+                height="98"
+                decoding="async"
+              />
+            </span>
+          </button>
+          <button
+            type="button"
+            class="frame-pick"
+            data-frame="mable"
+            aria-checked="false"
+            role="radio"
+            aria-label="Mable 相框"
+          >
+            <span class="frame-pick__thumb">
+              <span class="frame-pick__film" aria-hidden="true"></span>
+              <img
+                class="frame-pick__art"
+                src="assets/mable.png"
+                alt=""
+                width="120"
+                height="98"
+                decoding="async"
+              />
+            </span>
+          </button>
+          <button
+            type="button"
+            class="frame-pick"
+            data-frame="y2k"
+            aria-checked="false"
+            role="radio"
+            aria-label="Y2K 相框"
+          >
+            <span class="frame-pick__thumb">
+              <span class="frame-pick__film" aria-hidden="true"></span>
+              <img
+                class="frame-pick__art"
+                src="assets/y2k.png"
+                alt=""
+                width="120"
+                height="98"
+                decoding="async"
+              />
+            </span>
+          </button>
+        </div>
+      </aside>
+    </div>
 
     <template id="polaroidTpl">
-      <article class="polaroid">
-        <div class="polaroid__img-wrap">
-          <div class="polaroid__img"></div>
+      <article class="polaroid polaroid--theme-classic">
+        <div class="polaroid__classic-layer">
+          <img
+            class="polaroid__classic-art"
+            src="assets/classic.png"
+            alt=""
+            decoding="async"
+          />
+          <div class="polaroid__classic-slot">
+            <div class="polaroid__img-wrap">
+              <div class="polaroid__img"></div>
+              <div
+                class="polaroid__filmfx polaroid__filmfx--glowleak"
+                aria-hidden="true"
+              ></div>
+              <div
+                class="polaroid__filmfx polaroid__filmfx--scratches"
+                aria-hidden="true"
+              ></div>
+            </div>
+          </div>
         </div>
-        <div class="polaroid__caption">i-Type</div>
+      </article>
+    </template>
+
+    <template id="polaroidTplFlower">
+      <article class="polaroid polaroid--theme-flower">
+        <div class="polaroid__flower-layer">
+          <img
+            class="polaroid__flower-art"
+            src="assets/flower.png"
+            alt=""
+            decoding="async"
+          />
+          <div class="polaroid__flower-slot">
+            <div class="polaroid__img-wrap">
+              <div class="polaroid__img"></div>
+              <div
+                class="polaroid__filmfx polaroid__filmfx--glowleak"
+                aria-hidden="true"
+              ></div>
+              <div
+                class="polaroid__filmfx polaroid__filmfx--scratches"
+                aria-hidden="true"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <template id="polaroidTplMable">
+      <article class="polaroid polaroid--theme-mable">
+        <div class="polaroid__mable-layer">
+          <img
+            class="polaroid__mable-art"
+            src="assets/mable.png"
+            alt=""
+            decoding="async"
+          />
+          <div class="polaroid__mable-slot">
+            <div class="polaroid__img-wrap">
+              <div class="polaroid__img"></div>
+              <div
+                class="polaroid__filmfx polaroid__filmfx--glowleak"
+                aria-hidden="true"
+              ></div>
+              <div
+                class="polaroid__filmfx polaroid__filmfx--scratches"
+                aria-hidden="true"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <template id="polaroidTplY2k">
+      <article class="polaroid polaroid--theme-y2k">
+        <div class="polaroid__y2k-layer">
+          <img
+            class="polaroid__y2k-art"
+            src="assets/y2k.png"
+            alt=""
+            decoding="async"
+          />
+          <div class="polaroid__y2k-slot">
+            <div class="polaroid__img-wrap">
+              <div class="polaroid__img"></div>
+              <div
+                class="polaroid__filmfx polaroid__filmfx--glowleak"
+                aria-hidden="true"
+              ></div>
+              <div
+                class="polaroid__filmfx polaroid__filmfx--scratches"
+                aria-hidden="true"
+              ></div>
+            </div>
+          </div>
+        </div>
       </article>
     </template>
 

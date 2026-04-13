@@ -4,6 +4,10 @@
   const printsRail = document.getElementById("printsRail");
   const strip = document.getElementById("counterStrip");
   const tpl = document.getElementById("polaroidTpl");
+  const tplMable = document.getElementById("polaroidTplMable");
+  const tplY2k = document.getElementById("polaroidTplY2k");
+  const tplFlower = document.getElementById("polaroidTplFlower");
+  const frameSidebar = document.getElementById("frameSidebar");
   const video = document.getElementById("cameraFeed");
   const canvas = document.getElementById("captureCanvas");
   const camStatus = document.getElementById("camStatus");
@@ -18,6 +22,8 @@
   let streamReady = false;
   let deskZ = 200;
   let drag = null;
+  /** classic | flower | mable | y2k */
+  let frameStyle = "classic";
 
   const gradients = [
     "linear-gradient(160deg, #5c6b7a 0%, #8b9aab 35%, #c5d0dc 55%, #7a8fa3 100%)",
@@ -95,10 +101,41 @@
     }
 
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, outW, outH);
+    const exposure = autoExposureFromFrame(ctx, outW, outH);
     try {
-      return canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+      return {
+        dataUrl: canvas.toDataURL("image/jpeg", JPEG_QUALITY),
+        exposure,
+      };
     } catch {
       return null;
+    }
+  }
+
+  /** 按画面平均亮度微调曝光，直出明暗不一可拉齐一些 */
+  function autoExposureFromFrame(ctx, w, h) {
+    try {
+      const tw = 48;
+      const th = 48;
+      const t = document.createElement("canvas");
+      t.width = tw;
+      t.height = th;
+      const tctx = t.getContext("2d");
+      if (!tctx) return 1;
+      tctx.drawImage(ctx.canvas, 0, 0, w, h, 0, 0, tw, th);
+      const d = tctx.getImageData(0, 0, tw, th).data;
+      let sum = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        sum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      }
+      const n = d.length / 4;
+      const avg = sum / n / 255;
+      const target = 0.5;
+      let mult = target / Math.max(0.12, Math.min(0.88, avg));
+      mult = Math.min(1.14, Math.max(0.86, mult));
+      return Number(mult.toFixed(3));
+    } catch {
+      return 1;
     }
   }
 
@@ -164,7 +201,28 @@
     });
   }
 
-  function applyShotToPolaroid(shotEl, dataUrl) {
+  function randomizeGlowLeak(glowEl) {
+    if (!glowEl) return;
+    const u = function (a, b) {
+      return a + Math.random() * (b - a);
+    };
+    glowEl.style.setProperty("--fx-hx", u(26, 74).toFixed(1) + "%");
+    glowEl.style.setProperty("--fx-hy", u(14, 52).toFixed(1) + "%");
+    /* 圆形漏光：中心放在角区，避免大椭圆式「光带」跑进画面中间 */
+    glowEl.style.setProperty("--fx-l1x", u(2, 30).toFixed(1) + "%");
+    glowEl.style.setProperty("--fx-l1y", u(4, 36).toFixed(1) + "%");
+    glowEl.style.setProperty("--fx-l2x", u(70, 98).toFixed(1) + "%");
+    glowEl.style.setProperty("--fx-l2y", u(64, 96).toFixed(1) + "%");
+    glowEl.style.setProperty("--fx-l3x", u(4, 36).toFixed(1) + "%");
+    glowEl.style.setProperty("--fx-l3y", u(66, 96).toFixed(1) + "%");
+    glowEl.style.setProperty("--fx-rot", u(-18, 18).toFixed(1) + "deg");
+    glowEl.style.setProperty("--fx-scale", u(0.88, 1.14).toFixed(3));
+    glowEl.style.setProperty("--fx-origin-x", u(42, 58).toFixed(1) + "%");
+    glowEl.style.setProperty("--fx-origin-y", u(28, 48).toFixed(1) + "%");
+    glowEl.style.setProperty("--fx-op-mul", u(0.82, 1.08).toFixed(3));
+  }
+
+  function applyShotToPolaroid(shotEl, dataUrl, exposure) {
     if (dataUrl) {
       shotEl.style.removeProperty("--shot");
       shotEl.style.backgroundImage =
@@ -173,11 +231,15 @@
         ")";
       shotEl.style.backgroundSize = "cover, cover";
       shotEl.style.backgroundPosition = "center, center";
+      if (exposure != null) {
+        shotEl.style.setProperty("--polaroid-exposure", String(exposure));
+      }
     } else {
       const pick = gradients[(count - 1) % gradients.length];
       shotEl.style.removeProperty("background-image");
       shotEl.style.removeProperty("background-size");
       shotEl.style.removeProperty("background-position");
+      shotEl.style.removeProperty("--polaroid-exposure");
       shotEl.style.setProperty("--shot", pick);
     }
   }
@@ -191,10 +253,19 @@
 
     triggerFlash();
 
-    const node = tpl.content.firstElementChild.cloneNode(true);
+    let activeTpl = tpl;
+    if (frameStyle === "y2k" && tplY2k) activeTpl = tplY2k;
+    else if (frameStyle === "mable" && tplMable) activeTpl = tplMable;
+    else if (frameStyle === "flower" && tplFlower) activeTpl = tplFlower;
+    const node = activeTpl.content.firstElementChild.cloneNode(true);
     const shotEl = node.querySelector(".polaroid__img");
-    const dataUrl = streamReady ? captureFrameDataUrl() : null;
-    applyShotToPolaroid(shotEl, dataUrl);
+    randomizeGlowLeak(node.querySelector(".polaroid__filmfx--glowleak"));
+    const cap = streamReady ? captureFrameDataUrl() : null;
+    if (cap) {
+      applyShotToPolaroid(shotEl, cap.dataUrl, cap.exposure);
+    } else {
+      applyShotToPolaroid(shotEl, null);
+    }
 
     printsRail.prepend(node);
   }
@@ -250,6 +321,23 @@
     drag = null;
   }
 
+  function setupFramePicker() {
+    if (!frameSidebar) return;
+    frameSidebar.addEventListener("click", function (e) {
+      const btn = e.target.closest(".frame-pick[data-frame]");
+      if (!btn) return;
+      const next = btn.getAttribute("data-frame");
+      if (!next || next === frameStyle) return;
+      frameStyle = next;
+      frameSidebar.querySelectorAll(".frame-pick").forEach(function (b) {
+        const on = b.getAttribute("data-frame") === frameStyle;
+        b.classList.toggle("is-active", on);
+        b.setAttribute("aria-checked", on ? "true" : "false");
+      });
+    });
+  }
+
+  setupFramePicker();
   document.addEventListener("pointerdown", onPointerDown);
   document.addEventListener("pointermove", onPointerMove);
   document.addEventListener("pointerup", onPointerUp);

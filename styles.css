@@ -1,11 +1,18 @@
 :root {
-  /* 即时胶片：低对比、褪色、偏生活快照 / 怀旧（配合颗粒层） */
-  --polaroid-exposure: 1.02; /* 略提中间调，阴影不死黑 */
-  --polaroid-contrast: 0.76; /* 低对比、发灰、柔和 */
-  --polaroid-saturate: 0.62; /* 轻微褪色 */
-  --polaroid-sepia: 0.09; /* 很淡的化学片底色 */
-  --polaroid-hue: 8deg; /* 微偏青，不偏浓 */
-  --polaroid-blur: 0.55px; /* 极轻柔焦，略糊即可 */
+  /* 成片基础：亮度 -10%、对比 -20%、饱和拉高；怀旧档 3（另见 #polaroidTone） */
+  --polaroid-exposure: 1; /* 实拍由 JS 微调；与亮度系数相乘 */
+  --polaroid-brightness-mul: 0.9;
+  --polaroid-contrast: 0.93;
+  --polaroid-saturate: 1.28;
+  --polaroid-sepia: 0.11;
+  --polaroid-hue: 10deg;
+  --polaroid-blur: 0.55px;
+  /* 胶片叠层：光晕 60%、刮痕/漏光 100%、粒度 55%；样式强度 +30 与 +50 → 乘数 1.8 */
+  --filmfx-halo: 0.6;
+  --filmfx-leak: 1;
+  --filmfx-scratch: 1;
+  --filmfx-grain-opacity: 0.34;
+  --filmfx-style-mul: 1.8;
 
   --bg: #e8e8ea;
   --bg-dot: rgba(95, 95, 102, 0.22);
@@ -19,6 +26,11 @@
   --yellow-accent: #ffc107;
   /* 吐片 / 相纸最大宽度（槽口与 rail 对齐） */
   --polaroid-print-max: 200px;
+  /* classic.png 开孔：加高成像区；top 略收避免顶到图框外 */
+  --classic-slot-left: 5%;
+  --classic-slot-top: 9%;
+  --classic-slot-w: 91%;
+  --classic-slot-h: 72%;
 }
 
 *,
@@ -42,12 +54,230 @@ body {
     radial-gradient(var(--bg-dot) 0.9px, transparent 1.05px);
   background-size: 100% 100%, 13px 13px;
   background-position: center, 0 0;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  position: relative;
+}
+
+html {
+  height: 100%;
+}
+
+.app-shell {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.frame-sidebar {
+  flex: none;
+  padding: 0.25rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  z-index: 15;
+  transform: translateY(52px);
+}
+
+.frame-sidebar__list {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0;
+  padding: 1.35rem 0.5rem 0.15rem;
+  overflow: visible;
+}
+
+.frame-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  padding: 0.2rem 0.1rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transform-origin: 50% 92%;
+  transition: transform 0.24s ease-out;
+}
+
+.frame-pick:nth-child(1) {
+  z-index: 1;
+  transform: rotate(-14deg);
+  margin-right: clamp(-3.35rem, -9.5vw, -2.35rem);
+}
+
+/* 中间两张略上移，与两侧形成自然弧形 */
+.frame-pick:nth-child(2) {
+  z-index: 2;
+  transform: rotate(-5deg) translateY(-1.45rem);
+  margin-right: clamp(-3.35rem, -9.5vw, -2.35rem);
+}
+
+.frame-pick:nth-child(3) {
+  z-index: 3;
+  transform: rotate(5deg) translateY(-1.45rem);
+  margin-right: clamp(-3.35rem, -9.5vw, -2.35rem);
+}
+
+.frame-pick:nth-child(4) {
+  z-index: 4;
+  transform: rotate(14deg);
+  margin-right: 0;
+}
+
+.frame-pick:hover {
+  z-index: 8;
+}
+
+.frame-pick:nth-child(1):hover {
+  transform: rotate(-14deg) translateY(-12px);
+}
+
+.frame-pick:nth-child(2):hover {
+  transform: rotate(-5deg) translateY(calc(-1.45rem - 12px));
+}
+
+.frame-pick:nth-child(3):hover {
+  transform: rotate(5deg) translateY(calc(-1.45rem - 12px));
+}
+
+.frame-pick:nth-child(4):hover {
+  transform: rotate(14deg) translateY(-12px);
+}
+
+.frame-pick.is-active {
+  z-index: 6;
+}
+
+.frame-pick:nth-child(1).is-active {
+  transform: rotate(-14deg) scale(1.06);
+}
+
+.frame-pick:nth-child(2).is-active {
+  transform: rotate(-5deg) scale(1.06) translateY(-1.45rem);
+}
+
+.frame-pick:nth-child(3).is-active {
+  transform: rotate(5deg) scale(1.06) translateY(-1.45rem);
+}
+
+.frame-pick:nth-child(4).is-active {
+  transform: rotate(14deg) scale(1.06);
+}
+
+.frame-pick:nth-child(1).is-active:hover {
+  transform: rotate(-14deg) scale(1.06) translateY(-12px);
+}
+
+.frame-pick:nth-child(2).is-active:hover {
+  transform: rotate(-5deg) scale(1.06) translateY(calc(-1.45rem - 12px));
+}
+
+.frame-pick:nth-child(3).is-active:hover {
+  transform: rotate(5deg) scale(1.06) translateY(calc(-1.45rem - 12px));
+}
+
+.frame-pick:nth-child(4).is-active:hover {
+  transform: rotate(14deg) scale(1.06) translateY(-12px);
+}
+
+.frame-pick__thumb {
+  position: relative;
+  display: block;
+  width: min(38vw, 168px);
+  border-radius: 0;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.frame-pick__film {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  /* 白底片 50% 不透；classic / flower 开窗比成片 slot 略收一圈 */
+  background: rgba(255, 255, 255, 0.5);
+  clip-path: inset(11.5% 9% 23.5% 10%);
+}
+
+.frame-pick__art {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame-pick,
+  .frame-pick.is-active {
+    transition: none;
+  }
+
+  .frame-pick:nth-child(1),
+  .frame-pick:nth-child(1).is-active,
+  .frame-pick:nth-child(2),
+  .frame-pick:nth-child(2).is-active,
+  .frame-pick:nth-child(3),
+  .frame-pick:nth-child(3).is-active,
+  .frame-pick:nth-child(4),
+  .frame-pick:nth-child(4).is-active {
+    transform: none;
+    margin-right: 0.35rem;
+  }
+
+  .frame-pick:nth-child(4) {
+    margin-right: 0;
+  }
+
+  .frame-pick:nth-child(1):hover,
+  .frame-pick:nth-child(2):hover,
+  .frame-pick:nth-child(3):hover,
+  .frame-pick:nth-child(4):hover,
+  .frame-pick:nth-child(1).is-active:hover,
+  .frame-pick:nth-child(2).is-active:hover,
+  .frame-pick:nth-child(3).is-active:hover,
+  .frame-pick:nth-child(4).is-active:hover {
+    transform: none;
+  }
+
+  .frame-sidebar__list {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+  }
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem 1rem 6rem;
-  overflow-x: hidden;
-  position: relative;
+  padding: 1.5rem 0.75rem 1rem;
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    max-width: none;
+  }
 }
 
 /* 极轻颗粒，增强纸本感 */
@@ -93,6 +323,10 @@ body > * {
 .stage {
   position: relative;
   z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
   text-align: center;
 }
 
@@ -740,32 +974,299 @@ body > * {
   pointer-events: auto;
 }
 
-/* 外框 103:102，内相区 92:73；侧白边略收紧（略宽于比例，减少两侧留白感） */
+/* 吐片相纸基类：动效与宽度；具体画面由 theme 图框承担 */
 .polaroid {
   position: relative;
-  display: flex;
-  flex-direction: column;
   width: 100%;
   max-width: var(--polaroid-print-max);
-  aspect-ratio: 103 / 102;
   box-sizing: border-box;
-  background: #faf9f7;
-  padding-left: calc(100% * 5 / 206);
-  padding-right: calc(100% * 5 / 206);
-  padding-top: calc(100% * 5 / 103);
-  padding-bottom: calc(100% * 9 / 103);
-  border-radius: 2px;
   transform-origin: 50% 0;
   transform-style: preserve-3d;
   backface-visibility: hidden;
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.04), 0 22px 28px -6px rgba(0, 0, 0, 0.38),
-    0 10px 14px rgba(0, 0, 0, 0.22);
   margin-top: 0;
   animation: eject 1.15s cubic-bezier(0.32, 0.42, 0.18, 1) forwards;
 }
 
 .polaroid:not(:first-child) {
   margin-top: 14px;
+}
+
+/* 经典图框 assets/classic.png：黑区由上层 slot 盖住照片 */
+.polaroid--theme-classic {
+  background: none !important;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+  aspect-ratio: unset;
+}
+
+.polaroid--theme-classic > * {
+  position: relative;
+  z-index: 1;
+}
+
+.polaroid__classic-layer {
+  position: relative;
+  width: 100%;
+  filter: drop-shadow(0 16px 26px rgba(0, 0, 0, 0.28))
+    drop-shadow(0 6px 12px rgba(0, 0, 0, 0.14));
+}
+
+.polaroid__classic-slot {
+  position: absolute;
+  left: var(--classic-slot-left);
+  top: var(--classic-slot-top);
+  width: var(--classic-slot-w);
+  height: var(--classic-slot-h);
+  z-index: 2;
+  overflow: hidden;
+  background: #141210;
+}
+
+.polaroid__classic-art {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+  vertical-align: top;
+}
+
+.polaroid--theme-classic .polaroid__img-wrap {
+  aspect-ratio: unset;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  border-radius: 0;
+}
+
+.polaroid.polaroid--theme-classic.polaroid--pinned {
+  max-width: min(240px, 56vw);
+  width: min(240px, 56vw);
+  box-shadow: none !important;
+}
+
+.polaroid.polaroid--theme-classic.polaroid--pinned .polaroid__classic-layer {
+  filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.26))
+    drop-shadow(0 5px 10px rgba(0, 0, 0, 0.14));
+}
+
+.polaroid.polaroid--theme-classic.polaroid--dragging .polaroid__classic-layer {
+  filter: drop-shadow(0 20px 34px rgba(0, 0, 0, 0.32))
+    drop-shadow(0 8px 14px rgba(0, 0, 0, 0.18));
+}
+
+.polaroid.polaroid--theme-classic.polaroid--dragging {
+  box-shadow: none !important;
+}
+
+/* 花卉相框 assets/flower.png */
+.polaroid--theme-flower {
+  background: none !important;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+  aspect-ratio: unset;
+}
+
+.polaroid--theme-flower > * {
+  position: relative;
+  z-index: 1;
+}
+
+.polaroid__flower-layer {
+  position: relative;
+  width: 100%;
+  filter: drop-shadow(0 16px 26px rgba(0, 0, 0, 0.28))
+    drop-shadow(0 6px 12px rgba(0, 0, 0, 0.14));
+}
+
+.polaroid__flower-slot {
+  position: absolute;
+  left: var(--classic-slot-left);
+  top: var(--classic-slot-top);
+  width: var(--classic-slot-w);
+  height: var(--classic-slot-h);
+  z-index: 2;
+  overflow: hidden;
+  background: #141210;
+}
+
+.polaroid__flower-art {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+  vertical-align: top;
+}
+
+.polaroid--theme-flower .polaroid__img-wrap {
+  aspect-ratio: unset;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  border-radius: 0;
+}
+
+.polaroid.polaroid--theme-flower.polaroid--pinned {
+  max-width: min(240px, 56vw);
+  width: min(240px, 56vw);
+  box-shadow: none !important;
+}
+
+.polaroid.polaroid--theme-flower.polaroid--pinned .polaroid__flower-layer {
+  filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.26))
+    drop-shadow(0 5px 10px rgba(0, 0, 0, 0.14));
+}
+
+.polaroid.polaroid--theme-flower.polaroid--dragging .polaroid__flower-layer {
+  filter: drop-shadow(0 20px 34px rgba(0, 0, 0, 0.32))
+    drop-shadow(0 8px 14px rgba(0, 0, 0, 0.18));
+}
+
+.polaroid.polaroid--theme-flower.polaroid--dragging {
+  box-shadow: none !important;
+}
+
+/* Mable 相框 assets/mable.png（与 classic / flower 同开孔 --classic-slot-*） */
+.polaroid--theme-mable {
+  background: none !important;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+  aspect-ratio: unset;
+}
+
+.polaroid--theme-mable > * {
+  position: relative;
+  z-index: 1;
+}
+
+.polaroid__mable-layer {
+  position: relative;
+  width: 100%;
+  filter: drop-shadow(0 16px 26px rgba(0, 0, 0, 0.28))
+    drop-shadow(0 6px 12px rgba(0, 0, 0, 0.14));
+}
+
+.polaroid__mable-slot {
+  position: absolute;
+  left: var(--classic-slot-left);
+  top: var(--classic-slot-top);
+  width: var(--classic-slot-w);
+  height: var(--classic-slot-h);
+  z-index: 2;
+  overflow: hidden;
+  background: #141210;
+}
+
+.polaroid__mable-art {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+.polaroid--theme-mable .polaroid__img-wrap {
+  aspect-ratio: unset;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  border-radius: 0;
+}
+
+.polaroid.polaroid--theme-mable.polaroid--pinned {
+  max-width: min(240px, 56vw);
+  width: min(240px, 56vw);
+  box-shadow: none !important;
+}
+
+.polaroid.polaroid--theme-mable.polaroid--pinned .polaroid__mable-layer {
+  filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.26))
+    drop-shadow(0 5px 10px rgba(0, 0, 0, 0.14));
+}
+
+.polaroid.polaroid--theme-mable.polaroid--dragging .polaroid__mable-layer {
+  filter: drop-shadow(0 20px 34px rgba(0, 0, 0, 0.32))
+    drop-shadow(0 8px 14px rgba(0, 0, 0, 0.18));
+}
+
+.polaroid.polaroid--theme-mable.polaroid--dragging {
+  box-shadow: none !important;
+}
+
+/* Y2K 相框 assets/y2k.png */
+.polaroid--theme-y2k {
+  background: none !important;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+  aspect-ratio: unset;
+}
+
+.polaroid--theme-y2k > * {
+  position: relative;
+  z-index: 1;
+}
+
+.polaroid__y2k-layer {
+  position: relative;
+  width: 100%;
+  filter: drop-shadow(0 16px 26px rgba(0, 0, 0, 0.28))
+    drop-shadow(0 6px 12px rgba(0, 0, 0, 0.14));
+}
+
+.polaroid__y2k-slot {
+  position: absolute;
+  left: var(--classic-slot-left);
+  top: var(--classic-slot-top);
+  width: var(--classic-slot-w);
+  height: var(--classic-slot-h);
+  z-index: 2;
+  overflow: hidden;
+  background: #141210;
+}
+
+.polaroid__y2k-art {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+.polaroid--theme-y2k .polaroid__img-wrap {
+  aspect-ratio: unset;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  border-radius: 0;
+}
+
+.polaroid.polaroid--theme-y2k.polaroid--pinned {
+  max-width: min(240px, 56vw);
+  width: min(240px, 56vw);
+  box-shadow: none !important;
+}
+
+.polaroid.polaroid--theme-y2k.polaroid--pinned .polaroid__y2k-layer {
+  filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.26))
+    drop-shadow(0 5px 10px rgba(0, 0, 0, 0.14));
+}
+
+.polaroid.polaroid--theme-y2k.polaroid--dragging .polaroid__y2k-layer {
+  filter: drop-shadow(0 20px 34px rgba(0, 0, 0, 0.32))
+    drop-shadow(0 8px 14px rgba(0, 0, 0, 0.18));
+}
+
+.polaroid.polaroid--theme-y2k.polaroid--dragging {
+  box-shadow: none !important;
 }
 
 /* 吐片结束后可拖 */
@@ -791,38 +1292,15 @@ body > * {
   transform-style: flat;
   animation: none;
   clip-path: none;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.05), 0 14px 28px rgba(0, 0, 0, 0.3),
-    0 6px 12px rgba(0, 0, 0, 0.18);
-}
-
-.polaroid.polaroid--pinned::after {
-  opacity: 0.55;
-  filter: blur(8px);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.92),
+    inset 0 -2px 5px rgba(35, 30, 24, 0.05), 0 2px 0 rgba(0, 0, 0, 0.05),
+    0 14px 28px rgba(0, 0, 0, 0.3), 0 6px 12px rgba(0, 0, 0, 0.18);
 }
 
 .polaroid.polaroid--dragging {
   cursor: grabbing;
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.06), 0 22px 40px rgba(0, 0, 0, 0.38),
     0 10px 18px rgba(0, 0, 0, 0.22);
-}
-
-.polaroid::after {
-  content: "";
-  position: absolute;
-  left: 5%;
-  right: 5%;
-  bottom: 2px;
-  height: 16px;
-  background: radial-gradient(
-    ellipse 92% 50% at 50% 0%,
-    rgba(0, 0, 0, 0.5) 0%,
-    rgba(0, 0, 0, 0.15) 42%,
-    transparent 70%
-  );
-  filter: blur(6px);
-  opacity: 0.9;
-  z-index: -1;
-  pointer-events: none;
 }
 
 @keyframes eject {
@@ -851,21 +1329,100 @@ body > * {
   border-radius: 2px;
 }
 
-/* 胶片颗粒（叠在最上，soft-light 保留褪色感） */
+/* 粗粒胶片：双层噪声（大粒层已收细：更高 baseFrequency + 更小 tile） */
 .polaroid__img-wrap::before {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 4;
   pointer-events: none;
   border-radius: inherit;
-  opacity: 0.22;
-  mix-blend-mode: soft-light;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
-  background-size: 180px 180px;
+  opacity: calc(
+    var(--filmfx-grain-opacity) * var(--filmfx-style-mul) * 0.38
+  );
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='gc'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23gc)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='gf'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23gf)'/%3E%3C/svg%3E");
+  /* 铺满单块，避免小 tile 重复在中间露出矩形接缝 */
+  background-size: 100% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-blend-mode: overlay, soft-light;
 }
 
-/* 暗角 + 轻叠色：随意快照感，不过度戏剧 */
+/* 光晕 + 漏光：全部用圆形光斑（不用大椭圆，避免像长方形光带）；整层模糊柔边 */
+.polaroid__filmfx--glowleak {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  border-radius: inherit;
+  mix-blend-mode: screen;
+  filter: blur(11px);
+  transform: rotate(var(--fx-rot, 0deg))
+    scale(calc(var(--fx-scale, 1) * 1.12));
+  transform-origin: var(--fx-origin-x, 50%) var(--fx-origin-y, 38%);
+  opacity: calc(
+    min(1, var(--filmfx-halo) + var(--filmfx-leak) * 0.35) *
+      var(--filmfx-style-mul) * 0.48 * var(--fx-op-mul, 1)
+  );
+  background: radial-gradient(
+      circle 32% at var(--fx-hx, 42%) var(--fx-hy, 32%),
+      rgba(255, 252, 245, calc(0.62 * var(--filmfx-halo))) 0%,
+      rgba(255, 246, 230, 0.22) 42%,
+      transparent 68%
+    ),
+    radial-gradient(
+      circle 26% at var(--fx-l1x, 8%) var(--fx-l1y, 12%),
+      rgba(255, 188, 130, calc(0.72 * var(--filmfx-leak))) 0%,
+      rgba(255, 215, 175, 0.18) 48%,
+      transparent 72%
+    ),
+    radial-gradient(
+      circle 24% at var(--fx-l2x, 92%) var(--fx-l2y, 88%),
+      rgba(255, 225, 195, calc(0.65 * var(--filmfx-leak))) 0%,
+      rgba(255, 165, 145, 0.14) 45%,
+      transparent 70%
+    ),
+    radial-gradient(
+      circle 28% at var(--fx-l3x, 12%) var(--fx-l3y, 90%),
+      rgba(195, 228, 245, calc(0.45 * var(--filmfx-leak))) 0%,
+      transparent 62%
+    );
+}
+
+/* 刮痕 100% */
+.polaroid__filmfx--scratches {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  border-radius: inherit;
+  mix-blend-mode: soft-light;
+  opacity: calc(var(--filmfx-scratch) * var(--filmfx-style-mul) * 0.42);
+  background-image: repeating-linear-gradient(
+      118deg,
+      transparent,
+      transparent 1px,
+      rgba(255, 255, 255, 0.09) 1px,
+      rgba(255, 255, 255, 0.09) 2px
+    ),
+    repeating-linear-gradient(
+      -16deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.14) 2px,
+      rgba(0, 0, 0, 0.14) 3px
+    ),
+    repeating-linear-gradient(
+      6deg,
+      transparent 0 6px,
+      rgba(255, 255, 255, 0.05) 6px 7px
+    );
+  /* 勿用超宽 tile，易在中间形成带状块 */
+  background-size: 100% 100%, 100% 100%, 100% 100%;
+}
+
+/* 暗角 + 轻色调：避免左/右下双椭圆在 multiply 下夹出中间竖条色块 */
 .polaroid__img-wrap::after {
   content: "";
   position: absolute;
@@ -874,19 +1431,25 @@ body > * {
   pointer-events: none;
   border-radius: inherit;
   background: radial-gradient(
-      ellipse 98% 94% at 50% 48%,
-      transparent 38%,
-      rgba(42, 40, 36, 0.2) 85%,
-      rgba(32, 30, 28, 0.32) 100%
+      ellipse 78% 55% at 50% 10%,
+      rgba(232, 244, 252, 0.12) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 105% 100% at 50% 50%,
+      transparent 26%,
+      rgba(32, 30, 28, 0.28) 78%,
+      rgba(12, 11, 10, 0.58) 100%
     ),
     linear-gradient(
-      168deg,
-      rgba(248, 242, 232, 0.1) 0%,
+      100deg,
+      rgba(175, 210, 222, 0.06) 0%,
       transparent 48%,
-      rgba(200, 208, 212, 0.09) 100%
+      transparent 52%,
+      rgba(200, 218, 228, 0.05) 100%
     );
   mix-blend-mode: multiply;
-  opacity: 0.78;
+  opacity: 0.88;
 }
 
 .polaroid__img {
@@ -894,9 +1457,8 @@ body > * {
   z-index: 0;
   width: 100%;
   height: 100%;
-  /* 小图拉大时保留硬边缘像素格（配合低分辨率 capture） */
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  /* 低分辨率仍可用，但不用 pixelated，否则中间易显大块「长方形」像素格 */
+  image-rendering: auto;
   background-image: linear-gradient(
       135deg,
       rgba(255, 255, 255, 0.08) 0%,
@@ -907,23 +1469,27 @@ body > * {
       linear-gradient(160deg, #5c6b7a 0%, #8b9aab 35%, #c5d0dc 55%, #7a8fa3 100%)
     );
   background-size: cover;
-  filter: brightness(0) contrast(1.08) saturate(0.35)
+  filter: url(#polaroidTone) brightness(0) contrast(1.14) saturate(0.35)
     blur(calc(var(--polaroid-blur) * 1.12));
   animation: develop 3.6s ease-out 0.35s forwards;
 }
 
+/* url 滤镜须写在每条 keyframe，否则动画会打断 SVG 链 */
 @keyframes develop {
   0% {
-    filter: brightness(0) contrast(1.12) saturate(0.15)
+    filter: url(#polaroidTone) brightness(0) contrast(1.18) saturate(0.15)
       blur(calc(var(--polaroid-blur) * 1.22));
   }
   38% {
-    filter: brightness(0.22) contrast(0.95) saturate(0.42) sepia(0.22)
-      blur(calc(var(--polaroid-blur) * 1.06));
+    filter: url(#polaroidTone)
+      brightness(calc(0.22 * var(--polaroid-brightness-mul))) contrast(1.05)
+      saturate(0.48) sepia(0.18) blur(calc(var(--polaroid-blur) * 1.06));
   }
   100% {
-    filter: brightness(var(--polaroid-exposure))
-      contrast(var(--polaroid-contrast)) saturate(var(--polaroid-saturate))
+    filter: url(#polaroidTone)
+      brightness(
+        calc(var(--polaroid-exposure) * var(--polaroid-brightness-mul))
+      ) contrast(var(--polaroid-contrast)) saturate(var(--polaroid-saturate))
       sepia(var(--polaroid-sepia)) hue-rotate(var(--polaroid-hue))
       blur(var(--polaroid-blur));
   }
@@ -931,9 +1497,9 @@ body > * {
 
 .polaroid__caption {
   margin-top: auto;
-  padding-top: 0.2rem;
+  padding-top: 0.08rem;
   font-size: 0.62rem;
-  color: #888;
+  color: rgba(72, 68, 62, 0.72);
   letter-spacing: 0.15em;
   text-transform: uppercase;
   text-align: center;
